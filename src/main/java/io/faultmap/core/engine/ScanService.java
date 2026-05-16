@@ -1,3 +1,5 @@
+package io.faultmap.core.engine;
+
 import io.faultmap.core.domain.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,4 +1,4 @@
-package io.faultmap;
+package io.faultmap.scanner;
 
 import io.faultmap.config.PatternRegistry;
 import io.faultmap.core.domain.Module;
@@ -46,25 +46,25 @@ class SecretsPatternScannerTest {
         assertThat(findings).isNotEmpty();
         assertThat(findings).anyMatch(f ->
                 f.getRuleId().equals("AWS_SECRET_KEY")
-                && f.getSeverity() == Severity.CRITICAL
-                && f.getLocation().contains("aws.properties")
-                && f.getModule() == Module.CORE
+                        && f.getSeverity() == Severity.CRITICAL
+                        && f.getLocation().contains("aws.properties")
+                        && f.getModule() == Module.CORE
         );
     }
 
     @Test
-    @DisplayName("Detects database password in application.yml")
+    @DisplayName("Detects database password in application.properties")
     void detectsDatabasePassword() {
         RepositoryContent repo = repoWithFile(
-                "src/main/resources/application.yml",
-                "spring:\n  datasource:\n    password: MyS3cr3tPass!\n"
+                "src/main/resources/application.properties",
+                "server.port=8080\nspring.datasource.password=MyS3cr3tPass!\nspring.datasource.url=jdbc:postgresql://localhost/faultmap\n"
         );
 
         List<Finding> findings = scanner.scan(repo);
 
         assertThat(findings).anyMatch(f ->
                 f.getRuleId().equals("DATABASE_PASSWORD")
-                && f.getSeverity() == Severity.CRITICAL
+                        && f.getSeverity() == Severity.CRITICAL
         );
     }
 

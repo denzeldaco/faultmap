@@ -1,4 +1,4 @@
-package io.faultmap;
+package io.faultmap.core.engine;
 
 import io.faultmap.core.domain.Finding;
 import io.faultmap.core.domain.Module;

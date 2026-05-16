@@ -25,12 +25,12 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "findings",
-       indexes = {
-           @Index(name = "idx_findings_scan_result", columnList = "scan_result_id"),
-           @Index(name = "idx_findings_severity",    columnList = "severity"),
-           @Index(name = "idx_findings_status",      columnList = "status"),
-           @Index(name = "idx_findings_module",      columnList = "module")
-       })
+        indexes = {
+                @Index(name = "idx_findings_scan_result", columnList = "scan_result_id"),
+                @Index(name = "idx_findings_severity",    columnList = "severity"),
+                @Index(name = "idx_findings_status",      columnList = "status"),
+                @Index(name = "idx_findings_module",      columnList = "module")
+        })
 @Getter
 @Setter
 @Builder
@@ -82,8 +82,8 @@ public class Finding {
      */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
-        name = "finding_regulatory_refs",
-        joinColumns = @JoinColumn(name = "finding_id")
+            name = "finding_regulatory_refs",
+            joinColumns = @JoinColumn(name = "finding_id")
     )
     @Builder.Default
     private List<RegulatoryReference> regulatoryRefs = new ArrayList<>();
