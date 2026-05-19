@@ -37,6 +37,7 @@ faultmap:
     app-id: ${GITHUB_APP_ID:}
     private-key-path: ${GITHUB_PRIVATE_KEY_PATH:}
     webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+    token: ${GITHUB_TOKEN:}
 
   # Scan engine settings
   scan:
