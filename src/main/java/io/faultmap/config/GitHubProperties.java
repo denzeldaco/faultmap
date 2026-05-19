@@ -22,4 +22,4 @@ public class GitHubProperties {
      * Set via GITHUB_TOKEN env var.
      */
     private String token;
-
+}

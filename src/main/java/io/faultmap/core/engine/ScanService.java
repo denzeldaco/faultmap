@@ -3,6 +3,8 @@ package io.faultmap.core.engine;
 import io.faultmap.core.domain.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -37,8 +39,46 @@ public class ScanService {
     private final ScanResultRepository   scanResultRepository;
     private final FindingRepository      findingRepository;
 
+    /** Injected separately so the 3-arg constructor used in unit tests stays intact. */
+    @Autowired
+    private AsyncTaskExecutor taskExecutor;
+
+    // ── Public API ────────────────────────────────────────────────────────────
+
     /**
-     * Trigger a scan asynchronously.
+     * Create a PENDING scan record immediately (caller gets the scanResultId at once),
+     * then execute the scan in the background.
+     *
+     * This is the method the REST controller uses to return 202 Accepted without
+     * waiting for the scan to finish.
+     *
+     * @param target         The thing to scan
+     * @param organisationId Which organisation owns this scan
+     * @return               The persisted ScanResult in PENDING state (ID already set)
+     */
+    public ScanResult submit(ScanTarget target, String organisationId) {
+        ScanResult result = ScanResult.builder()
+                .organisationId(organisationId)
+                .module(target.getModule())
+                .targetRef(target.getTargetRef())
+                .status(ScanStatus.PENDING)
+                .build();
+        scanResultRepository.save(result);
+
+        log.info("[Faultmap] Scan queued | id={} org={} target={}",
+                result.getScanResultId(), organisationId, target.getTargetRef());
+
+        taskExecutor.execute(() -> {
+            result.setStatus(ScanStatus.RUNNING);
+            scanResultRepository.save(result);
+            runRules(target, result);
+        });
+
+        return result;
+    }
+
+    /**
+     * Trigger a scan asynchronously (legacy — wraps the synchronous scan in a future).
      *
      * @param target         The thing to scan
      * @param organisationId Which organisation owns this scan
@@ -53,8 +93,6 @@ public class ScanService {
      * Trigger a scan synchronously (used in tests and scheduled jobs).
      */
     public ScanResult scan(ScanTarget target, String organisationId) {
-
-        // 1. Create and persist a ScanResult in RUNNING state
         ScanResult result = ScanResult.builder()
                 .organisationId(organisationId)
                 .module(target.getModule())
@@ -67,10 +105,20 @@ public class ScanService {
                 result.getScanResultId(), organisationId,
                 target.getModule(), target.getTargetRef());
 
+        return runRules(target, result);
+    }
+
+    // ── Internals ─────────────────────────────────────────────────────────────
+
+    /**
+     * Execute all applicable rules against the target and update the ScanResult.
+     * Called by both scan() (synchronous) and submit() (background thread).
+     * The result must already be in RUNNING state before this is called.
+     */
+    private ScanResult runRules(ScanTarget target, ScanResult result) {
         List<Finding> allFindings = new ArrayList<>();
 
         try {
-            // 2. Find applicable rules and run each one
             List<ScanRule> applicableRules = allRules.stream()
                     .filter(rule -> rule.supports(target))
                     .toList();
@@ -81,25 +129,18 @@ public class ScanService {
             for (ScanRule rule : applicableRules) {
                 try {
                     List<Finding> ruleFindings = rule.scan(target);
-
-                    // Attach this scan's result ID to every finding
                     ruleFindings.forEach(f -> f.setScanResultId(result.getScanResultId()));
                     allFindings.addAll(ruleFindings);
-
                     log.debug("[Faultmap] Rule {} produced {} findings",
                             rule.ruleId(), ruleFindings.size());
-
                 } catch (Exception e) {
-                    // A rule failure must not stop the rest of the scan
                     log.error("[Faultmap] Rule {} failed for target={}: {}",
                             rule.ruleId(), target.getTargetRef(), e.getMessage(), e);
                 }
             }
 
-            // 3. Persist all findings
             findingRepository.saveAll(allFindings);
 
-            // 4. Update ScanResult with counts and COMPLETED status
             result.setStatus(ScanStatus.COMPLETED);
             result.setCompletedAt(Instant.now());
             result.setCriticalCount(countBySeverity(allFindings, Severity.CRITICAL));
